@@ -1,7 +1,8 @@
 import { GameLocation, gameLocations } from '@/constants/GameData';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from 'expo-router'; // Import router
 import React, { useEffect, useState } from 'react';
-import { Alert, Modal, Platform, StyleSheet, TouchableOpacity, useColorScheme, View } from 'react-native';
+import { Alert, Modal, Platform, StatusBar, StyleSheet, TouchableOpacity, useColorScheme, View } from 'react-native'; // Přidán StatusBar
 import MapViewComponent from '../../components/MapViewComponent';
 import ParallaxScrollView from '../../components/ParallaxScrollView';
 import { ThemedText } from '../../components/ThemedText';
@@ -32,7 +33,8 @@ export default function HomeScreen() {
   const [alertShownForOutOfArea, setAlertShownForOutOfArea] = useState(false);
   const [showSimulationControls, setShowSimulationControls] = useState(__DEV__);
   const [modalVisible, setModalVisible] = useState(false);
-  const [selectedLocation, setSelectedLocation] = useState<GameLocation | null>(null); // Opraveno: LocationData -> GameLocation
+  const [selectedLocation, setSelectedLocation] = useState<GameLocation | null>(null);
+  const [isMapFullscreen, setIsMapFullscreen] = useState(false); // Nový stav pro fullscreen mapu
 
   const theme = useColorScheme() ?? 'light';
   const themeColors = Colors[theme]; // Přidáno pro přístup k barvám tématu
@@ -95,6 +97,18 @@ export default function HomeScreen() {
     }
   }, [currentLocation, activatedLocations]); // Přidána závislost activatedLocations
 
+  const handleResetProgress = async () => {
+    try {
+      await AsyncStorage.removeItem('activatedLocations');
+      setActivatedLocations([]);
+      console.log('--- POSTUP BYL RESETOVÁN ---');
+      Alert.alert('Postup resetován', 'Všechny aktivované lokace byly vymazány.');
+    } catch (e) {
+      console.error("Failed to reset progress", e);
+      Alert.alert('Chyba', 'Nepodařilo se resetovat postup.');
+    }
+  };
+
   const simulateMove = (lat: number, lon: number) => {
     if (updateSimulatedLocation) {
       updateSimulatedLocation({ latitude: lat, longitude: lon });
@@ -114,26 +128,66 @@ export default function HomeScreen() {
   };
 
   const renderSimulationControls = () => {
-    return gameLocations.map((loc) => (
-      <TouchableOpacity
-        key={loc.id}
-        style={[styles.simulationButton, { backgroundColor: themeColors.tint }]}
-        onPress={() => simulateMove(loc.latitude, loc.longitude)}
-      >
-        <ThemedText
-          lightColor={Colors.light.background} // Text bude bílý ve světlém režimu
-          darkColor={Colors.dark.background}   // Text bude tmavě šedý v tmavém režimu
-          style={{ textAlign: 'center' }}
+    return (
+      <>
+        {gameLocations.map((loc) => (
+          <TouchableOpacity
+            key={loc.id}
+            style={[styles.simulationButton, { backgroundColor: themeColors.tint }]}
+            onPress={() => simulateMove(loc.latitude, loc.longitude)}
+          >
+            <ThemedText
+              lightColor={Colors.light.background} // Text bude bílý ve světlém režimu
+              darkColor={Colors.dark.background}   // Text bude tmavě šedý v tmavém režimu
+              style={{ textAlign: 'center' }}
+            >
+              {`Přejít na: ${loc.title}`}
+            </ThemedText>
+          </TouchableOpacity>
+        ))}
+        <TouchableOpacity
+          style={[styles.simulationButton, { backgroundColor: 'red', marginTop: 15, marginBottom: 5 }]} // Výrazná barva pro reset
+          onPress={handleResetProgress}
         >
-          {`Přejít na: ${loc.title}`}
-        </ThemedText>
-      </TouchableOpacity>
-    ));
+          <ThemedText
+            lightColor={Colors.light.background}
+            darkColor={Colors.dark.background}
+            style={{ textAlign: 'center', fontWeight: 'bold' }}
+          >
+            Resetovat postup
+          </ThemedText>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.simulationButton, { backgroundColor: themeColors.icon, marginTop: 5, marginBottom: 5 }]} // Použití themeColors.icon pro odlišení
+          onPress={() => router.push('/style-showcase')}
+        >
+          <ThemedText
+            lightColor={Colors.light.background}
+            darkColor={Colors.dark.background}
+            style={{ textAlign: 'center' }}
+          >
+            Zobrazit Style Showcase
+          </ThemedText>
+        </TouchableOpacity>
+      </>
+    );
   };
 
   const styles = StyleSheet.create({
     container: {
       flex: 1,
+    },
+    fullscreenMapContainer: { // Nový styl pro fullscreen mapu
+      ...StyleSheet.absoluteFillObject, // Zabere celou obrazovku
+      zIndex: 1000, // Aby byla nad ostatními prvky
+    },
+    mapToggleButton: { // Styl pro tlačítko přepínání mapy
+      position: 'absolute',
+      top: Platform.OS === 'android' ? StatusBar.currentHeight || 10 : 50, // Pozice pod status barem
+      left: 10,
+      zIndex: 1001, // Nad mapou
+      padding: 10,
+      borderRadius: 5,
     },
     titleContainer: {
       flexDirection: 'row',
@@ -235,6 +289,58 @@ export default function HomeScreen() {
     }
   }, [currentLocation, initialRegion, alertShownForOutOfArea]);
 
+  if (isMapFullscreen) {
+    return (
+      <View style={styles.fullscreenMapContainer}>
+        <MapViewComponent
+          initialRegion={initialRegion}
+          currentLocation={currentLocation}
+          activatedLocations={activatedLocations}
+          onMarkerPress={handleMarkerPress}
+          themeColors={themeColors}
+          styles={{
+            map: { flex: 1 },
+            calloutContainer: { width: 150 },
+            calloutView: { padding: 10, borderRadius: 10 },
+            calloutTitle: { fontWeight: 'bold', marginBottom: 5 },
+            calloutDescription: { fontSize: 12 },
+          }}
+        />
+        <TouchableOpacity
+          style={[styles.mapToggleButton, { backgroundColor: themeColors.tint }]}
+          onPress={() => setIsMapFullscreen(false)}
+        >
+          <ThemedText lightColor={Colors.light.background} darkColor={Colors.dark.background}>
+            Zpět do menu
+          </ThemedText>
+        </TouchableOpacity>
+        {selectedLocation && ( // Zobrazení modalu i ve fullscreen mapě
+          <Modal
+            animationType="slide"
+            transparent={true}
+            visible={modalVisible}
+            onRequestClose={closeModal}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={[styles.modalContent, { backgroundColor: themeColors.background }]}>
+                <ThemedText style={[styles.modalTitle, { color: themeColors.text }]}>{selectedLocation.title}</ThemedText>
+                <ThemedText style={{ color: themeColors.text, marginBottom: 5 }}>{selectedLocation.task}</ThemedText>
+                <ThemedText style={{ color: themeColors.text, fontStyle: 'italic', fontSize: 12, marginBottom: 20 }}>
+                  {`Stav: ${activatedLocations.includes(selectedLocation.id) ? 'Aktivováno' : 'Neaktivováno'}`}
+                </ThemedText>
+                <TouchableOpacity onPress={closeModal} style={styles.modalCloseButtonContainer}>
+                  <View style={[styles.modalCloseButton, { backgroundColor: themeColors.tint }]}>
+                    <ThemedText style={[styles.modalCloseButtonText, { color: themeColors.background }]}>Zavřít</ThemedText>
+                  </View>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
+        )}
+      </View>
+    );
+  }
+
   return (
     <ParallaxScrollView
       headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
@@ -242,6 +348,14 @@ export default function HomeScreen() {
     >
       <ThemedView style={styles.titleContainer}>
         <ThemedText type="title">Vítejte ve V.M.</ThemedText>
+        <TouchableOpacity
+          style={[styles.simulationButton, { backgroundColor: themeColors.tint, marginLeft: 'auto', paddingHorizontal: 8, paddingVertical: 6 }]} // Upravený styl pro menší tlačítko
+          onPress={() => setIsMapFullscreen(true)}
+        >
+          <ThemedText lightColor={Colors.light.background} darkColor={Colors.dark.background} style={{ fontSize: 12 }}>
+            Celá mapa
+          </ThemedText>
+        </TouchableOpacity>
       </ThemedView>
 
       <ThemedView style={styles.stepContainer}>
@@ -267,6 +381,7 @@ export default function HomeScreen() {
             calloutDescription: { fontSize: 12 },
           }}
         />
+        {/* <ThemedText>MapViewComponent je dočasně zakomentován pro testování zvuku.</ThemedText> */}
       </ThemedView>
 
       <ThemedView style={styles.stepContainer}>

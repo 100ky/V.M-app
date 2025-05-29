@@ -10,20 +10,39 @@ export interface Region {
 }
 
 // --- Konfigurace pro simulaci polohy ---
-const USE_MOCK_LOCATION = true; // Odkomentováno
-const MOCK_COORDINATES = { // Odkomentováno
-    latitude: 49.9709,
-    longitude: 14.4208,
+const USE_MOCK_LOCATION = true; // Vráceno na true pro vývoj se simulovanou polohou
+const VYSOKE_MYTO_COORDINATES = {
+    latitude: 49.9530,
+    longitude: 16.1575,
+    latitudeDelta: 0.02, // Přiměřený zoom pro město
+    longitudeDelta: 0.01,
 };
+const MOCK_COORDINATES = { // Nastaveno na Vysoké Mýto pro výchozí simulaci
+    latitude: VYSOKE_MYTO_COORDINATES.latitude,
+    longitude: VYSOKE_MYTO_COORDINATES.longitude,
+};
+
 // --- Konec konfigurace pro simulaci polohy ---
 
 export const useLocationTracking = () => {
     const [currentLocation, setCurrentLocation] = useState<Location.LocationObject | null>(null);
-    const [initialRegion, setInitialRegion] = useState<Region>({
-        latitude: USE_MOCK_LOCATION ? MOCK_COORDINATES.latitude : 50.002,
-        longitude: USE_MOCK_LOCATION ? MOCK_COORDINATES.longitude : 16.155,
-        latitudeDelta: 0.0922,
-        longitudeDelta: 0.0421,
+    const [initialRegion, setInitialRegion] = useState<Region>(() => {
+        if (USE_MOCK_LOCATION) {
+            return {
+                latitude: MOCK_COORDINATES.latitude, // Nyní Vysoké Mýto
+                longitude: MOCK_COORDINATES.longitude, // Nyní Vysoké Mýto
+                latitudeDelta: VYSOKE_MYTO_COORDINATES.latitudeDelta, // Zoom pro Vysoké Mýto
+                longitudeDelta: VYSOKE_MYTO_COORDINATES.longitudeDelta, // Zoom pro Vysoké Mýto
+            };
+        }
+        // Pokud nepoužíváme mock, defaultně Vysoké Mýto
+        // useEffect níže přepíše skutečnou polohou, pokud je dostupná
+        return {
+            latitude: VYSOKE_MYTO_COORDINATES.latitude,
+            longitude: VYSOKE_MYTO_COORDINATES.longitude,
+            latitudeDelta: VYSOKE_MYTO_COORDINATES.latitudeDelta,
+            longitudeDelta: VYSOKE_MYTO_COORDINATES.longitudeDelta,
+        };
     });
     const [locationError, setLocationError] = useState<string | null>(null);
 
@@ -91,7 +110,13 @@ export const useLocationTracking = () => {
                 timestamp: Date.now(),
             };
             setCurrentLocation(mockLocObj);
-            setInitialRegion(prev => ({ ...prev, ...newCoords })); // Aktualizujeme i initialRegion pro mapu
+            // Nastavení regionu pro zoom level ~14
+            setInitialRegion({
+                latitude: newCoords.latitude,
+                longitude: newCoords.longitude,
+                latitudeDelta: 0.005, // Menší delta pro větší přiblížení (zoom ~14-15)
+                longitudeDelta: 0.0021, // Menší delta pro větší přiblížení
+            });
         } else {
             Alert.alert('Simulace vypnuta', 'Pro aktualizaci simulované polohy nastavte USE_MOCK_LOCATION na true v useLocationTracking.ts.');
         }

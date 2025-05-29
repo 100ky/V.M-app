@@ -33,6 +33,8 @@ const MapViewComponent: React.FC<MapViewComponentProps> = ({
     styles,
     onMarkerPress, // Přidáno do destrukturalizace
 }) => {
+    console.log('[MapViewComponent] Rendering with activatedLocations:', activatedLocations);
+
     return (
         <MapView
             style={styles.map}
@@ -65,27 +67,33 @@ const MapViewComponent: React.FC<MapViewComponentProps> = ({
                     pinColor={themeColors.tint}
                 />
             )}
-            {gameLocations.map((location: GameLocation) => (
-                <Marker
-                    key={location.id}
-                    coordinate={{
-                        latitude: location.latitude,
-                        longitude: location.longitude,
-                    }}
-                    title={location.title}
-                    pinColor={activatedLocations.includes(location.id) ? "gold" : "green"}
-                    onPress={() => onMarkerPress(location)} // Volání onMarkerPress při stisknutí markeru
-                >
-                    <Callout tooltip style={styles.calloutContainer} onPress={() => onMarkerPress(location)}>
-                        <View style={[styles.calloutView, { backgroundColor: themeColors.background, borderColor: themeColors.icon }]}>
-                            <Text style={[styles.calloutTitle, { color: themeColors.text }]}>{location.title}</Text>
-                            {/* <Text style={[styles.calloutDescription, { color: themeColors.text }]}>{location.task}</Text> */}
-                            {/* Zobrazení úkolu v calloutu může být příliš velké, zvažte zobrazení jen titulku nebo kratšího popisu */}
-                            <Text style={[styles.calloutDescription, { color: themeColors.text }]}>Stiskněte pro detaily</Text>
-                        </View>
-                    </Callout>
-                </Marker>
-            ))}
+            {gameLocations.map((location: GameLocation) => {
+                const isActivated = activatedLocations.includes(location.id);
+                const pinColor = isActivated ? "gold" : "green";
+                console.log(`[MapViewComponent] Marker: ${location.title}, Activated: ${isActivated}, PinColor: ${pinColor}`); // Logování zde
+
+                return (
+                    <Marker
+                        key={`${location.id}-${isActivated}`} // Klíč nyní zahrnuje stav aktivace
+                        coordinate={{
+                            latitude: location.latitude,
+                            longitude: location.longitude,
+                        }}
+                        title={location.title}
+                        pinColor={pinColor} // Použití vypočítané barvy
+                        onPress={() => onMarkerPress(location)}
+                    >
+                        <Callout tooltip style={styles.calloutContainer} onPress={() => onMarkerPress(location)}>
+                            <View style={[styles.calloutView, { backgroundColor: themeColors.background, borderColor: themeColors.icon }]}>
+                                <Text style={[styles.calloutTitle, { color: themeColors.text }]}>{location.title}</Text>
+                                {/* <Text style={[styles.calloutDescription, { color: themeColors.text }]}>{location.task}</Text> */}
+                                {/* Zobrazení úkolu v calloutu může být příliš velké, zvažte zobrazení jen titulku nebo kratšího popisu */}
+                                <Text style={[styles.calloutDescription, { color: themeColors.text }]}>Stiskněte pro detaily</Text>
+                            </View>
+                        </Callout>
+                    </Marker>
+                );
+            })}
         </MapView>
     );
 };
